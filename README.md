@@ -1,34 +1,42 @@
-# Reaper.farm
+# Advanced Sample Hardhat Project
 
-Yield farming optimizer for Fantom Opera.
+This project demonstrates an advanced Hardhat use case, integrating other tools commonly used alongside Hardhat in the ecosystem.
 
-## Addresses  
+The project comes with a sample contract, a test for that contract, a sample script that deploys that contract, and an example of a task implementation, which simply lists the available accounts. It also comes with a variety of other tools, preconfigured to work with the project code.
 
-deployer: [0x85df0B925E0Af60A399a8b81bA5B69eAd3461de6](https://ftmscan.com/address/0x85df0B925E0Af60A399a8b81bA5B69eAd3461de6)
+Try running some of the following tasks:
 
+```shell
+npx hardhat accounts
+npx hardhat compile
+npx hardhat clean
+npx hardhat test
+npx hardhat node
+npx hardhat help
+REPORT_GAS=true npx hardhat test
+npx hardhat coverage
+npx hardhat run scripts/deploy.js
+node scripts/deploy.js
+npx eslint '**/*.js'
+npx eslint '**/*.js' --fix
+npx prettier '**/*.{json,sol,md}' --check
+npx prettier '**/*.{json,sol,md}' --write
+npx solhint 'contracts/**/*.sol'
+npx solhint 'contracts/**/*.sol' --fix
+```
 
-## Our Contracts
+# Etherscan verification
 
-The main contracts that comprise reaper.farm are our vaults, autocompounding strategy, and our self-accounting simple strategy
+To try out Etherscan verification, you first need to deploy a contract to an Ethereum network that's supported by Etherscan, such as Ropsten.
 
-### Vaults
+In this project, copy the .env.example file to a file named .env, and then edit it to fill in the details. Enter your Etherscan API key, your Ropsten node URL (eg from Alchemy), and the private key of the account which will send the deployment transaction. With a valid .env file in place, first deploy your contract:
 
-like many autocompounding vaults, we adapted the battle-tested skeleton of yearnv1.
+```shell
+hardhat run --network ropsten scripts/deploy.js
+```
 
-### AutoCompounder
+Then, copy the deployment address and paste it in to replace `DEPLOYED_CONTRACT_ADDRESS` in this command:
 
-Our v1 strategy is a simple autocompounder that redeposits into the same vault, as more services get ported to fantom, more complex strategies will be deployed
-
-### Treasury
-
-Our treasury includes a small amount of accounting functions
-
-
-## Community 💀
-
-If you have any questions, concerns or suggestions join our communtiy. We want to hear from people who use our service and help foster a positive community for fantom power users and novices alike. We look forward to helping you Reap, Compound, and Repeat.
-
-
-Discord: https://discord.gg/UGyepS9
-
-Website: https://reaper.farm/
+```shell
+npx hardhat verify --network ropsten DEPLOYED_CONTRACT_ADDRESS "Hello, Hardhat!"
+```
