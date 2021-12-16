@@ -216,7 +216,7 @@ contract ReaperVaultv1_2 is ERC20, Ownable, ReentrancyGuard {
      * tokens are burned in the process.
      */
     function withdraw(uint256 _shares) public nonReentrant {
-      require(_shares > 0, "please provide amount");
+        require(_shares > 0, "please provide amount");
         uint256 r = (balance().mul(_shares)).div(totalSupply());
         _burn(msg.sender, _shares);
 
