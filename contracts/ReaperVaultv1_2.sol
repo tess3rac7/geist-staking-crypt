@@ -16,7 +16,7 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
  * This is the contract that receives funds and that users interface with.
  * The yield optimizing strategy itself is implemented in a separate 'Strategy.sol' contract.
  */
-contract ReaperVault is ERC20, Ownable, ReentrancyGuard {
+contract ReaperVaultv1_2 is ERC20, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
@@ -29,6 +29,9 @@ contract ReaperVault is ERC20, Ownable, ReentrancyGuard {
     StratCandidate public stratCandidate;
     // The strategy currently in use by the vault.
     address public strategy;
+
+    uint256 public depositFee;
+    uint256 public constant PERCENT_DIVISOR = 10000;
 
     /**
     * @dev The stretegy's initialization status. Gives deployer 20 minutes after contract
@@ -91,7 +94,8 @@ contract ReaperVault is ERC20, Ownable, ReentrancyGuard {
         address _token,
         string memory _name,
         string memory _symbol,
-        uint256 _approvalDelay
+        uint256 _approvalDelay,
+        uint256 _depositFee
     ) ERC20(
         string(_name),
         string(_symbol)
@@ -99,6 +103,7 @@ contract ReaperVault is ERC20, Ownable, ReentrancyGuard {
         token = IERC20(_token);
         approvalDelay = _approvalDelay;
         constructionTime = block.timestamp;
+        depositFee = _depositFee;
     }
 
     /**
@@ -176,11 +181,12 @@ contract ReaperVault is ERC20, Ownable, ReentrancyGuard {
         token.safeTransferFrom(msg.sender, address(this), _amount);
         uint256 _after = token.balanceOf(address(this));
         _amount = _after.sub(_before);
+        uint256 _amountAfterDeposit = (_amount.mul(PERCENT_DIVISOR.sub(depositFee))).div(PERCENT_DIVISOR);
         uint256 shares = 0;
         if (totalSupply() == 0) {
-            shares = _amount;
+            shares = _amountAfterDeposit;
         } else {
-            shares = (_amount.mul(totalSupply())).div(_pool);
+            shares = (_amountAfterDeposit.mul(totalSupply())).div(_pool);
         }
         _mint(msg.sender, shares);
         earn();
@@ -240,6 +246,10 @@ contract ReaperVault is ERC20, Ownable, ReentrancyGuard {
         emit NewStratCandidate(_implementation);
     }
 
+    function updateDepositFee(uint256 fee) public onlyOwner {
+        depositFee = fee;
+    }
+
     /**
      * @dev It switches the active strat for the strat candidate. After upgrading, the
      * candidate implementation is set to the 0x00 address, and proposedTime to a time
@@ -266,18 +276,18 @@ contract ReaperVault is ERC20, Ownable, ReentrancyGuard {
     */
 
     function incrementDeposits(uint _amount) internal returns (bool) {
-      uint initial = cumulativeDeposits[msg.sender];
-      uint newTotal = initial.add(_amount);
-      cumulativeDeposits[msg.sender] = newTotal;
-      emit DepositsIncremented(msg.sender, _amount, newTotal);
+      uint initial = cumulativeDeposits[tx.origin];
+      uint newTotal = initial + _amount;
+      cumulativeDeposits[tx.origin] = newTotal;
+      emit DepositsIncremented(tx.origin, _amount, newTotal);
       return true;
     }
 
     function incrementWithdrawals(uint _amount) internal returns (bool) {
-      uint initial = cumulativeWithdrawals[msg.sender];
-      uint newTotal = initial.add(_amount);
-      cumulativeWithdrawals[msg.sender] = newTotal;
-      emit WithdrawalsIncremented(msg.sender, _amount, newTotal);
+      uint initial = cumulativeWithdrawals[tx.origin];
+      uint newTotal = initial + _amount;
+      cumulativeWithdrawals[tx.origin] = newTotal;
+      emit WithdrawalsIncremented(tx.origin, _amount, newTotal);
       return true;
     }
 
