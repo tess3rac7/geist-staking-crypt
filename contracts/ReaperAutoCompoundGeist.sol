@@ -202,6 +202,7 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      * as is treasuryFeeToVault
      */
     function chargeFees(uint256 _profit) internal {
+        // TODO tess3rac7 are we happy accepting fee in Geist?
         uint256 callFeeToUser = _profit.mul(callFee).div(PERCENT_DIVISOR);
         IERC20(geist).safeTransfer(msg.sender, callFeeToUser);
 
