@@ -2,7 +2,10 @@
 
 pragma solidity ^0.8.0;
 
+import "./interfaces/IAToken.sol";
 import "./interfaces/IGeistStaking.sol";
+import "./interfaces/ILendingPool.sol";
+import "./interfaces/ILendingPoolAddressesProvider.sol";
 import "./interfaces/IUniswapV2Pair.sol";
 import "./interfaces/IUniswapRouterETH.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -30,19 +33,21 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      * @dev Tokens Used:
      * {wftm} - Required for liquidity routing when doing swaps.
      * {geist} - Base token on this strategy that is staked at Geist Finance.
-     * {rewardTokens} - List of tokens in which Geist pays rewards.
+     * {rewardBaseTokens} - List of base tokens (NOT gTokens) in which Geist pays rewards, for allowance and swap path purposes.
      */
     address public wftm = address(0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83);
     address public geist = address(0xd8321AA83Fb0a4ECd6348D4577431310A6E0814d);
-    address[] public rewardTokens;
+    address[] public rewardBaseTokens;
 
     /**
      * @dev Third Party Contracts:
      * {uniRouter} - the uniRouter for target DEX
      * {geistStaking} - Geist's staking contract
+     * {geistAddressesProvider} - Directory to get addresses of latest Geist lending-related contracts
      */
     address public uniRouter = address(0xF491e7B69E4244ad4002BC14e878a34207E38c29);
     address public geistStaking = address(0x49c93a95dbcc9A6A4D8f77E59c038ce5020e82f8);
+    address public geistAddressesProvider = address(0x6c793c628Fe2b480c5e6FB7957dDa4b9291F9c9b);
 
     /**
      * @dev Reaper Contracts:
@@ -77,9 +82,9 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
     uint constant  public PERCENT_DIVISOR = 10000;
 
     /**
-     * @dev Paths use to swap reward tokens for Geist.
+     * @dev Paths use to swap base reward tokens (NOT gTokens) for Geist.
      */
-    mapping(address => address[]) public pathForRewardToken;
+    mapping(address => address[]) public pathForBaseRewardToken;
 
     /**
      * {StratHarvest} Event that is fired each time someone harvests the strat.
@@ -106,12 +111,12 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
 
         for (uint256 i = 0; i < _rewardTokens.length; i++) {
             address token = _rewardTokens[i];
-            rewardTokens.push(token);
+            rewardBaseTokens.push(token);
 
             if (token == wftm) {
-                pathForRewardToken[token] = [token, geist];
+                pathForBaseRewardToken[token] = [token, geist];
             } else {
-                pathForRewardToken[token] = [token, wftm, geist];
+                pathForBaseRewardToken[token] = [token, wftm, geist];
             }
         }
 
@@ -121,7 +126,7 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
     /**
      * @dev Function that puts the funds to work.
      * It gets called whenever someone deposits in the strategy's vault contract.
-     * It deposits {geist} in the Geist Staking contract to farm all the {rewardTokens}
+     * It deposits {geist} in the Geist Staking contract to farm all the {rewardBaseTokens}
      */
     function deposit() public whenNotPaused {
         uint256 geistBal = IERC20(geist).balanceOf(address(this));
@@ -155,17 +160,37 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
 
     /**
      * @dev Core function of the strat, in charge of collecting and re-investing rewards.
-     * 1. It claims rewards from the masterChef.
-     * 2. It charges the system fees to simplify the split.
-     * 3. It swaps the {rewardToken} token for {lpToken0} & {lpToken1}
-     * 4. Adds more liquidity to the pool.
-     * 5. It deposits the new LP tokens.
+     * 1. It claims rewards from the Geist Staking contract in terms of gTokens (gWFTM, gDAI, gETH etc.)
+     * 2. For each earned reward gToken:
+     *    - withdraw the corresponding underlying base token (WFTM, DAI, ETH etc.) from the Geist Lending Pool
+     *    - swap base token for Geist tokens.
+     * 3. It charges the system fees out of the newly earned Geist tokens.
+     * 4. It deposits the remaining Geist tokens back into the staking contract.
      */
     function harvest() external whenNotPaused {
         require(!Address.isContract(msg.sender), "!contract");
-        // IMasterChef(masterChef).deposit(poolId, 0);
-        chargeFees();
-        addLiquidity();
+
+        IGeistStaking stakingContract = IGeistStaking(geistStaking);
+        ILendingPool lendingPool = ILendingPool(ILendingPoolAddressesProvider(geistAddressesProvider).getLendingPool());
+        uint256 startingGeistBalance = balanceOfGeist();
+
+        // 1. claims rewards from the Geist Staking contract
+        IGeistStaking.RewardData[] memory rewardDataArray = stakingContract.claimableRewards(address(this));
+        stakingContract.getReward();
+
+        // 2. For each earned reward gToken:
+        for (uint256 i = 0; i < rewardDataArray.length; i++) {
+            // - withdraw the underlying base token from the Geist Lending Pool
+            address baseToken = IAToken(rewardDataArray[i].token).UNDERLYING_ASSET_ADDRESS();
+            uint256 amount = lendingPool.withdraw(baseToken, type(uint256).max, msg.sender);
+
+            // - swap base token for Geist tokens.
+            IUniswapRouterETH(uniRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                amount, 0, pathForBaseRewardToken[baseToken], address(this), block.timestamp.add(600)
+            );
+        }
+
+        chargeFees(balanceOfGeist() - startingGeistBalance);
         deposit();
 
         emit StratHarvest(msg.sender);
@@ -176,35 +201,12 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      * callFeeToUser is set as a percentage of the fee,
      * as is treasuryFeeToVault
      */
-    function chargeFees() internal {
-        // uint256 toWftm = IERC20(rewardToken).balanceOf(address(this)).mul(totalFee).div(PERCENT_DIVISOR);
-        // IUniswapRouterETH(uniRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(toWftm, 0, rewardTokenToWftmRoute, address(this), block.timestamp.add(600));
+    function chargeFees(uint256 _profit) internal {
+        uint256 callFeeToUser = _profit.mul(callFee).div(PERCENT_DIVISOR);
+        IERC20(geist).safeTransfer(msg.sender, callFeeToUser);
 
-        // uint256 wftmBal = IERC20(wftm).balanceOf(address(this));
-
-        // uint256 callFeeToUser = wftmBal.mul(callFee).div(PERCENT_DIVISOR);
-        // IERC20(wftm).safeTransfer(msg.sender, callFeeToUser);
-
-        // uint256 treasuryFeeToVault = wftmBal.mul(treasuryFee).div(PERCENT_DIVISOR);
-        // IERC20(wftm).safeTransfer(treasury, treasuryFeeToVault);
-    }
-
-    /**
-     * @dev Swaps {rewardToken} for {lpToken0}, {lpToken1} & {wftm} using SpookySwap.
-     */
-    function addLiquidity() internal {
-        // uint256 rewardTokenHalf = IERC20(rewardToken).balanceOf(address(this)).div(2);
-
-        // if (lpToken0 != rewardToken) {
-        //     IUniswapRouterETH(uniRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(rewardTokenHalf, 0, rewardTokenToLp0Route, address(this), block.timestamp.add(600));
-        // }
-
-        // if (lpToken1 != rewardToken) {
-        //     IUniswapRouterETH(uniRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(rewardTokenHalf, 0, rewardTokenToLp1Route, address(this), block.timestamp.add(600));
-        // }
-        // uint256 lp0Bal = IERC20(lpToken0).balanceOf(address(this));
-        // uint256 lp1Bal = IERC20(lpToken1).balanceOf(address(this));
-        // IUniswapRouterETH(uniRouter).addLiquidity(lpToken0, lpToken1, lp0Bal, lp1Bal, 1, 1, address(this), block.timestamp.add(600));
+        uint256 treasuryFeeToVault = _profit.mul(treasuryFee).div(PERCENT_DIVISOR);
+        IERC20(geist).safeTransfer(treasury, treasuryFeeToVault);
     }
 
     /**
@@ -278,12 +280,12 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      * this new token within this function.
      */
     function addRewardToken(address _token) external onlyOwner whenNotPaused returns (bool) {
-        rewardTokens.push(_token);
+        rewardBaseTokens.push(_token);
 
         if (_token == wftm) {
-            pathForRewardToken[_token] = [_token, geist];
+            pathForBaseRewardToken[_token] = [_token, geist];
         } else {
-            pathForRewardToken[_token] = [_token, wftm, geist];
+            pathForBaseRewardToken[_token] = [_token, wftm, geist];
         }
 
         IERC20(_token).safeApprove(uniRouter, 0);
@@ -296,17 +298,17 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
     function giveAllowances() internal {
         IERC20(geist).safeApprove(geistStaking, type(uint256).max);
 
-        for (uint256 i = 0; i < rewardTokens.length; i++) {
-            IERC20(rewardTokens[i]).safeApprove(uniRouter, 0);
-            IERC20(rewardTokens[i]).safeApprove(uniRouter, type(uint256).max);
+        for (uint256 i = 0; i < rewardBaseTokens.length; i++) {
+            IERC20(rewardBaseTokens[i]).safeApprove(uniRouter, 0);
+            IERC20(rewardBaseTokens[i]).safeApprove(uniRouter, type(uint256).max);
         }
     }
 
     function removeAllowances() internal {
         IERC20(geist).safeApprove(geistStaking, 0);
 
-        for (uint256 i = 0; i < rewardTokens.length; i++) {
-            IERC20(rewardTokens[i]).safeApprove(uniRouter, 0);
+        for (uint256 i = 0; i < rewardBaseTokens.length; i++) {
+            IERC20(rewardBaseTokens[i]).safeApprove(uniRouter, 0);
         }
     }
 
