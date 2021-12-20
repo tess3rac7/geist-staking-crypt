@@ -35,8 +35,8 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      * {geist} - Base token on this strategy that is staked at Geist Finance.
      * {rewardBaseTokens} - List of base tokens (NOT gTokens) in which Geist pays rewards, for allowance and swap path purposes.
      */
-    address public wftm = address(0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83);
-    address public geist = address(0xd8321AA83Fb0a4ECd6348D4577431310A6E0814d);
+    address public constant wftm = address(0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83);
+    address public constant geist = address(0xd8321AA83Fb0a4ECd6348D4577431310A6E0814d);
     address[] public rewardBaseTokens;
 
     /**
@@ -45,9 +45,9 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      * {geistStaking} - Geist's staking contract
      * {geistAddressesProvider} - Directory to get addresses of latest Geist lending-related contracts
      */
-    address public uniRouter = address(0xF491e7B69E4244ad4002BC14e878a34207E38c29);
-    address public geistStaking = address(0x49c93a95dbcc9A6A4D8f77E59c038ce5020e82f8);
-    address public geistAddressesProvider = address(0x6c793c628Fe2b480c5e6FB7957dDa4b9291F9c9b);
+    address public constant uniRouter = address(0xF491e7B69E4244ad4002BC14e878a34207E38c29);
+    address public constant geistStaking = address(0x49c93a95dbcc9A6A4D8f77E59c038ce5020e82f8);
+    address public constant geistAddressesProvider = address(0x6c793c628Fe2b480c5e6FB7957dDa4b9291F9c9b);
 
     /**
      * @dev Reaper Contracts:
@@ -55,7 +55,7 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      * {vault} - Address of the vault that controls the strategy's funds.
      */
     address public treasury;
-    address public vault;
+    address public immutable vault;
 
     /**
     * @dev Distribution of fees earned. This allocations relative to the % implemented on
@@ -166,6 +166,8 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      *    - swap base token for Geist tokens.
      * 3. It charges the system fees out of the newly earned Geist tokens.
      * 4. It deposits the remaining Geist tokens back into the staking contract.
+     *
+     * TODO tess3rac7, swap all reward tokens to FTM first, charge fees, then swap remaining FTM to Geist
      */
     function harvest() external whenNotPaused {
         require(!Address.isContract(msg.sender), "!contract");
