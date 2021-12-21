@@ -261,9 +261,9 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
     function retireStrat() external {
         require(msg.sender == vault, "!vault");
 
-        IGeistStaking(geistStaking).exit();
-
-        // TODO tess3rac7 probably also swap all earned rewards for Geist here??
+        claimRewardsAndSwapToWftm();
+        convertWftmToGeist();
+        IGeistStaking(geistStaking).withdraw(balanceOfPool());
 
         uint256 geistBal = IERC20(geist).balanceOf(address(this));
         IERC20(geist).transfer(vault, geistBal);
