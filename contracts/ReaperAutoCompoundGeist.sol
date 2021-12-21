@@ -307,6 +307,7 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
 
     function giveAllowances() internal {
         IERC20(geist).safeApprove(geistStaking, type(uint256).max);
+        IERC20(wftm).safeApprove(uniRouter, type(uint256).max);
 
         for (uint256 i = 0; i < rewardBaseTokens.length; i++) {
             IERC20(rewardBaseTokens[i]).safeApprove(uniRouter, 0);
@@ -316,6 +317,7 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
 
     function removeAllowances() internal {
         IERC20(geist).safeApprove(geistStaking, 0);
+        IERC20(wftm).safeApprove(uniRouter, 0);
 
         for (uint256 i = 0; i < rewardBaseTokens.length; i++) {
             IERC20(rewardBaseTokens[i]).safeApprove(uniRouter, 0);
