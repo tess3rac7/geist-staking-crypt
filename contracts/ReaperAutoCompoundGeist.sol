@@ -33,7 +33,8 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      * @dev Tokens Used:
      * {wftm} - Required for liquidity routing when doing swaps.
      * {geist} - Base token on this strategy that is staked at Geist Finance.
-     * {rewardBaseTokens} - List of base tokens (NOT gTokens) in which Geist pays rewards, for allowance and swap path purposes.
+     * {rewardBaseTokens} - List of base tokens (NOT gTokens) other than wFTM in which Geist pays rewards,
+     *                      for allowance and swap path purposes.
      */
     address public constant wftm = address(0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83);
     address public constant geist = address(0xd8321AA83Fb0a4ECd6348D4577431310A6E0814d);
@@ -82,9 +83,12 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
     uint constant  public PERCENT_DIVISOR = 10000;
 
     /**
-     * @dev Paths use to swap base reward tokens (NOT gTokens) for Geist.
+     * @dev Paths used to swap tokens:
+     * {pathForBaseRewardToken} - to swap base reward tokens (NOT gTokens) for {wftm}.
+     * {wftmToGeistPath} - to swap {wftm} to {geist}
      */
     mapping(address => address[]) public pathForBaseRewardToken;
+    address[] public wftmToGeistPath = [wftm, geist];
 
     /**
      * {StratHarvest} Event that is fired each time someone harvests the strat.
@@ -112,12 +116,7 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
         for (uint256 i = 0; i < _rewardTokens.length; i++) {
             address token = _rewardTokens[i];
             rewardBaseTokens.push(token);
-
-            if (token == wftm) {
-                pathForBaseRewardToken[token] = [token, geist];
-            } else {
-                pathForBaseRewardToken[token] = [token, wftm, geist];
-            }
+            pathForBaseRewardToken[token] = [token, wftm];
         }
 
         giveAllowances();
@@ -163,18 +162,15 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      * 1. It claims rewards from the Geist Staking contract in terms of gTokens (gWFTM, gDAI, gETH etc.)
      * 2. For each earned reward gToken:
      *    - withdraw the corresponding underlying base token (WFTM, DAI, ETH etc.) from the Geist Lending Pool
-     *    - swap base token for Geist tokens.
-     * 3. It charges the system fees out of the newly earned Geist tokens.
-     * 4. It deposits the remaining Geist tokens back into the staking contract.
-     *
-     * TODO tess3rac7, swap all reward tokens to FTM first, charge fees, then swap remaining FTM to Geist
+     *    - swap base token for wFTM tokens.
+     * 3. It charges the system fees out of the newly earned wFTM tokens.
+     * 4. It swaps the remaining wFTM into Geist and deposits it back into the staking contract.
      */
     function harvest() external whenNotPaused {
         require(!Address.isContract(msg.sender), "!contract");
 
         IGeistStaking stakingContract = IGeistStaking(geistStaking);
         ILendingPool lendingPool = ILendingPool(ILendingPoolAddressesProvider(geistAddressesProvider).getLendingPool());
-        uint256 startingGeistBalance = balanceOfGeist();
 
         // 1. claims rewards from the Geist Staking contract
         IGeistStaking.RewardData[] memory rewardDataArray = stakingContract.claimableRewards(address(this));
@@ -186,13 +182,16 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
             address baseToken = IAToken(rewardDataArray[i].token).UNDERLYING_ASSET_ADDRESS();
             uint256 amount = lendingPool.withdraw(baseToken, type(uint256).max, msg.sender);
 
-            // - swap base token for Geist tokens.
-            IUniswapRouterETH(uniRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(
-                amount, 0, pathForBaseRewardToken[baseToken], address(this), block.timestamp.add(600)
-            );
+            // - swap base token for wFTM (if it isn't already wFTM)
+            if (baseToken != wftm) {
+                IUniswapRouterETH(uniRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                    amount, 0, pathForBaseRewardToken[baseToken], address(this), block.timestamp.add(600)
+                );
+            }
         }
 
-        chargeFees(balanceOfGeist() - startingGeistBalance);
+        chargeFees();
+        convertWftmToGeist();
         deposit();
 
         emit StratHarvest(msg.sender);
@@ -203,13 +202,26 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      * callFeeToUser is set as a percentage of the fee,
      * as is treasuryFeeToVault
      */
-    function chargeFees(uint256 _profit) internal {
-        // TODO tess3rac7 are we happy accepting fee in Geist?
-        uint256 callFeeToUser = _profit.mul(callFee).div(PERCENT_DIVISOR);
-        IERC20(geist).safeTransfer(msg.sender, callFeeToUser);
+    function chargeFees() internal {
+        uint256 wftmBal = IERC20(wftm).balanceOf(address(this));
 
-        uint256 treasuryFeeToVault = _profit.mul(treasuryFee).div(PERCENT_DIVISOR);
-        IERC20(geist).safeTransfer(treasury, treasuryFeeToVault);
+        uint256 callFeeToUser = wftmBal.mul(callFee).div(PERCENT_DIVISOR);
+        IERC20(wftm).safeTransfer(msg.sender, callFeeToUser);
+
+        uint256 treasuryFeeToVault = wftmBal.mul(treasuryFee).div(PERCENT_DIVISOR);
+        IERC20(wftm).safeTransfer(treasury, treasuryFeeToVault);
+    }
+
+    /**
+     * @dev Converts all of this contract's {wftm} balance into {geist}.
+     *      Typically called during harvesting to transform assets back into
+     *      {geist} for staking.
+     */
+    function convertWftmToGeist() internal {
+        uint256 wftmBal = IERC20(wftm).balanceOf(address(this));
+        IUniswapRouterETH(uniRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(
+            wftmBal, 0, wftmToGeistPath, address(this), block.timestamp.add(600)
+        );
     }
 
     /**
@@ -284,12 +296,7 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      */
     function addRewardToken(address _token) external onlyOwner whenNotPaused returns (bool) {
         rewardBaseTokens.push(_token);
-
-        if (_token == wftm) {
-            pathForBaseRewardToken[_token] = [_token, geist];
-        } else {
-            pathForBaseRewardToken[_token] = [_token, wftm, geist];
-        }
+        pathForBaseRewardToken[_token] = [_token, wftm];
 
         IERC20(_token).safeApprove(uniRouter, 0);
         IERC20(_token).safeApprove(uniRouter, type(uint256).max);
