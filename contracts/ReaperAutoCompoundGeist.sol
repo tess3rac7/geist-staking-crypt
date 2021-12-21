@@ -169,6 +169,20 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
     function harvest() external whenNotPaused {
         require(!Address.isContract(msg.sender), "!contract");
 
+        claimRewardsAndSwapToWftm();
+        chargeFees();
+        convertWftmToGeist();
+        deposit();
+
+        emit StratHarvest(msg.sender);
+    }
+
+    /**
+     * @dev Claim rewards from the Geist staking contract (gWFTM, gDAI etc.),
+     *      withdraws underlying assets (WFTM, DAI, etc.) from the lending pool,
+     *      swaps all of them to Wftm
+     */
+    function claimRewardsAndSwapToWftm() internal {
         IGeistStaking stakingContract = IGeistStaking(geistStaking);
         ILendingPool lendingPool = ILendingPool(ILendingPoolAddressesProvider(geistAddressesProvider).getLendingPool());
 
@@ -189,12 +203,6 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
                 );
             }
         }
-
-        chargeFees();
-        convertWftmToGeist();
-        deposit();
-
-        emit StratHarvest(msg.sender);
     }
 
     /**
