@@ -194,7 +194,7 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
         for (uint256 i = 0; i < rewardDataArray.length; i++) {
             // - withdraw the underlying base token from the Geist Lending Pool
             address baseToken = IAToken(rewardDataArray[i].token).UNDERLYING_ASSET_ADDRESS();
-            uint256 amount = lendingPool.withdraw(baseToken, type(uint256).max, msg.sender);
+            uint256 amount = lendingPool.withdraw(baseToken, type(uint256).max, address(this));
 
             // - swap base token for wFTM (if it isn't already wFTM)
             if (baseToken != wftm) {
