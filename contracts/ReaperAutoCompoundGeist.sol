@@ -6,8 +6,7 @@ import "./interfaces/IAToken.sol";
 import "./interfaces/IGeistStaking.sol";
 import "./interfaces/ILendingPool.sol";
 import "./interfaces/ILendingPoolAddressesProvider.sol";
-import "./interfaces/IUniswapV2Pair.sol";
-import "./interfaces/IUniswapRouterETH.sol";
+import "./interfaces/IUniswapV2Router02.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -178,6 +177,42 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
     }
 
     /**
+     * @dev Returns the approx amount of profit from harvesting.
+     *      Profit is denominated in WFTM, and takes fees into account.
+     */
+    function estimateHarvest() external view returns (uint256) {
+        uint256 profit = 0;
+
+        IGeistStaking.RewardData[] memory rewardDataArray =  IGeistStaking(geistStaking).claimableRewards(address(this));
+        for (uint256 i = 0; i < rewardDataArray.length; i++) {
+            // Geist rewards not applicable since we're not locking
+            // also skip tokens with 0 reward
+            if (rewardDataArray[i].token == geist || rewardDataArray[i].amount == 0) {
+                continue;
+            }
+
+            // for all other reward gTokens, add wFTM equivalent to profit
+            address baseToken = IAToken(rewardDataArray[i].token).UNDERLYING_ASSET_ADDRESS();
+            if (baseToken == wftm) {
+                profit = profit.add(rewardDataArray[i].amount);
+            } else {
+                uint[] memory amountOutMins = IUniswapV2Router02(uniRouter).getAmountsOut(
+                    rewardDataArray[i].amount,
+                    pathForBaseRewardToken[baseToken]
+                );
+                profit = profit.add(amountOutMins[1]);
+            }
+        }
+
+        // take out fees from profit
+        uint256 callFeeToUser = profit.mul(callFee).div(PERCENT_DIVISOR);
+        uint256 treasuryFeeToVault = profit.mul(treasuryFee).div(PERCENT_DIVISOR);
+        profit = profit.sub(callFeeToUser).sub(treasuryFeeToVault);
+
+        return profit;
+    }
+
+    /**
      * @dev Claim rewards from the Geist staking contract (gWFTM, gDAI etc.),
      *      withdraws underlying assets (WFTM, DAI, etc.) from the lending pool,
      *      swaps all of them to Wftm
@@ -204,7 +239,7 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
 
             // - swap base token for wFTM (if it isn't already wFTM)
             if (baseToken != wftm) {
-                IUniswapRouterETH(uniRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                IUniswapV2Router02(uniRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(
                     amount, 0, pathForBaseRewardToken[baseToken], address(this), block.timestamp.add(600)
                 );
             }
@@ -233,7 +268,7 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      */
     function convertWftmToGeist() internal {
         uint256 wftmBal = IERC20(wftm).balanceOf(address(this));
-        IUniswapRouterETH(uniRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        IUniswapV2Router02(uniRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(
             wftmBal, 0, wftmToGeistPath, address(this), block.timestamp.add(600)
         );
     }
