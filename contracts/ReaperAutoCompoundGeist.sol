@@ -192,6 +192,12 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
 
         // 2. For each earned reward gToken:
         for (uint256 i = 0; i < rewardDataArray.length; i++) {
+            // (skip Geist as we won't have any locking rewards but it's returned anyway)
+            // (also skip if this token doesn't have any rewards)
+            if (rewardDataArray[i].token == geist || rewardDataArray[i].amount == 0) {
+                continue;
+            }
+
             // - withdraw the underlying base token from the Geist Lending Pool
             address baseToken = IAToken(rewardDataArray[i].token).UNDERLYING_ASSET_ADDRESS();
             uint256 amount = lendingPool.withdraw(baseToken, type(uint256).max, address(this));
