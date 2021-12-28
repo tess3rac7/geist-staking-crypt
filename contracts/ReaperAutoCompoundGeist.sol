@@ -180,9 +180,7 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      * @dev Returns the approx amount of profit from harvesting.
      *      Profit is denominated in WFTM, and takes fees into account.
      */
-    function estimateHarvest() external view returns (uint256) {
-        uint256 profit = 0;
-
+    function estimateHarvest() external view returns (uint256 profit, uint256 callFeeToUser) {
         IGeistStaking.RewardData[] memory rewardDataArray =  IGeistStaking(geistStaking).claimableRewards(address(this));
         for (uint256 i = 0; i < rewardDataArray.length; i++) {
             // Geist rewards not applicable since we're not locking
@@ -205,11 +203,9 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
         }
 
         // take out fees from profit
-        uint256 callFeeToUser = profit.mul(callFee).div(PERCENT_DIVISOR);
+        callFeeToUser = profit.mul(callFee).div(PERCENT_DIVISOR);
         uint256 treasuryFeeToVault = profit.mul(treasuryFee).div(PERCENT_DIVISOR);
         profit = profit.sub(callFeeToUser).sub(treasuryFeeToVault);
-
-        return profit;
     }
 
     /**
