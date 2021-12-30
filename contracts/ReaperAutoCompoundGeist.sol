@@ -248,12 +248,12 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      * as is treasuryFeeToVault
      */
     function chargeFees() internal {
-        uint256 wftmBal = IERC20(wftm).balanceOf(address(this));
+        uint256 wftmFee = IERC20(wftm).balanceOf(address(this)).mul(totalFee).div(PERCENT_DIVISOR);
 
-        uint256 callFeeToUser = wftmBal.mul(callFee).div(PERCENT_DIVISOR);
+        uint256 callFeeToUser = wftmFee.mul(callFee).div(PERCENT_DIVISOR);
         IERC20(wftm).safeTransfer(msg.sender, callFeeToUser);
 
-        uint256 treasuryFeeToVault = wftmBal.mul(treasuryFee).div(PERCENT_DIVISOR);
+        uint256 treasuryFeeToVault = wftmFee.mul(treasuryFee).div(PERCENT_DIVISOR);
         IERC20(wftm).safeTransfer(treasury, treasuryFeeToVault);
     }
 
