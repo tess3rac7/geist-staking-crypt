@@ -28,6 +28,15 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
     using Address for address;
     using SafeMath for uint256;
 
+    struct Harvest {
+        uint256 timestamp;
+        uint256 profit;
+        uint256 tvl; // doesn't include profit
+    }
+
+    Harvest[] public harvestLog;
+    uint256 public harvestLogCadence = 12 hours; // make configurable?
+
     /**
      * @dev Tokens Used:
      * {wftm} - Required for liquidity routing when doing swaps.
@@ -168,10 +177,20 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
     function harvest() external whenNotPaused {
         require(!Address.isContract(msg.sender), "!contract");
 
+        Harvest memory logEntry;
+        logEntry.timestamp = block.timestamp;
+        logEntry.tvl = balanceOf();
+
         claimRewardsAndSwapToWftm();
         chargeFees();
         convertWftmToGeist();
         deposit();
+
+        logEntry.profit = balanceOf().sub(logEntry.tvl);
+        if (harvestLog.length == 0 ||
+            harvestLog[harvestLog.length - 1].timestamp.add(harvestLogCadence) <= logEntry.timestamp) {
+            harvestLog.push(logEntry);
+        }
 
         emit StratHarvest(msg.sender);
     }
@@ -277,7 +296,7 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      * @dev Function to calculate the total underlying {geist} held by the strat.
      * It takes into account both the funds in hand, as the funds allocated in the Geist Staking contract.
      */
-    function balanceOf() external view returns (uint256) {
+    function balanceOf() public view returns (uint256) {
         return balanceOfGeist().add(balanceOfPool());
     }
 
