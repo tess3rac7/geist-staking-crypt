@@ -195,6 +195,24 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
         emit StratHarvest(msg.sender);
     }
 
+    function harvestLogLength() external view returns (uint256) {
+        return harvestLog.length;
+    }
+
+    function averageHarvestPercentageSince(uint256 _timestamp) external view returns (uint256) {
+        uint256 runningProfitPercentageSum;
+        uint256 numLogsProcessed;
+
+        for (uint256 i = harvestLog.length - 1; i >= 0 && harvestLog[i].timestamp >= _timestamp; i--) {
+            numLogsProcessed++;
+            runningProfitPercentageSum.add(
+                harvestLog[i].profit.mul(1e18).div(harvestLog[i].tvl)
+            );
+        }
+
+        return runningProfitPercentageSum.div(numLogsProcessed);
+    }
+
     /**
      * @dev Returns the approx amount of profit from harvesting.
      *      Profit is denominated in WFTM, and takes fees into account.
