@@ -16,7 +16,7 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
  * This is the contract that receives funds and that users interface with.
  * The yield optimizing strategy itself is implemented in a separate 'Strategy.sol' contract.
  */
-contract ReaperVaultv1_2 is ERC20, Ownable, ReentrancyGuard {
+contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
@@ -32,6 +32,7 @@ contract ReaperVaultv1_2 is ERC20, Ownable, ReentrancyGuard {
 
     uint256 public depositFee;
     uint256 public constant PERCENT_DIVISOR = 10000;
+    uint256 public tvlCap;
 
     /**
     * @dev The stretegy's initialization status. Gives deployer 20 minutes after contract
@@ -76,6 +77,7 @@ contract ReaperVaultv1_2 is ERC20, Ownable, ReentrancyGuard {
     event NewStratCandidate(address implementation);
     event UpgradeStrat(address implementation);
     event TermsAccepted(address user);
+    event TvlCapUpdated(uint256 newTvlCap);
 
     event DepositsIncremented(address user, uint amount, uint total);
     event WithdrawalsIncremented(address user, uint amount, uint total);
@@ -95,7 +97,8 @@ contract ReaperVaultv1_2 is ERC20, Ownable, ReentrancyGuard {
         string memory _name,
         string memory _symbol,
         uint256 _approvalDelay,
-        uint256 _depositFee
+        uint256 _depositFee,
+        uint256 _tvlCap
     ) ERC20(
         string(_name),
         string(_symbol)
@@ -104,6 +107,7 @@ contract ReaperVaultv1_2 is ERC20, Ownable, ReentrancyGuard {
         approvalDelay = _approvalDelay;
         constructionTime = block.timestamp;
         depositFee = _depositFee;
+        tvlCap = _tvlCap;
     }
 
     /**
@@ -175,8 +179,10 @@ contract ReaperVaultv1_2 is ERC20, Ownable, ReentrancyGuard {
      * it's set to true
      */
     function deposit(uint _amount) public nonReentrant {
-        require(_amount > 0, "please provide amount");
+        require(_amount != 0, "please provide amount");
         uint256 _pool = balance();
+        require(_pool.add(_amount) <= tvlCap, "vault is full!");
+
         uint256 _before = token.balanceOf(address(this));
         token.safeTransferFrom(msg.sender, address(this), _amount);
         uint256 _after = token.balanceOf(address(this));
@@ -248,6 +254,14 @@ contract ReaperVaultv1_2 is ERC20, Ownable, ReentrancyGuard {
 
     function updateDepositFee(uint256 fee) public onlyOwner {
         depositFee = fee;
+    }
+
+    /**
+     * @dev pass in max value of uint to effectively remove TVL cap
+     */
+    function updateTvlCap(uint256 _newTvlCap) external onlyOwner {
+        tvlCap = _newTvlCap;
+        emit TvlCapUpdated(tvlCap);
     }
 
     /**
