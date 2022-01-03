@@ -77,7 +77,7 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
     uint public callFee = 1000;
     uint public treasuryFee = 9000;
     uint public securityFee = 10;
-    uint public totalFee = 500;
+    uint public totalFee = 450;
     uint constant public MAX_FEE = 500;
     uint constant  public PERCENT_DIVISOR = 10000;
 
@@ -203,9 +203,9 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
         }
 
         // take out fees from profit
-        callFeeToUser = profit.mul(callFee).div(PERCENT_DIVISOR);
-        uint256 treasuryFeeToVault = profit.mul(treasuryFee).div(PERCENT_DIVISOR);
-        profit = profit.sub(callFeeToUser).sub(treasuryFeeToVault);
+        uint256 wftmFee = profit.mul(totalFee).div(PERCENT_DIVISOR);
+        callFeeToUser = wftmFee.mul(callFee).div(PERCENT_DIVISOR);
+        profit = profit.sub(wftmFee);
     }
 
     /**
@@ -250,11 +250,13 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
     function chargeFees() internal {
         uint256 wftmFee = IERC20(wftm).balanceOf(address(this)).mul(totalFee).div(PERCENT_DIVISOR);
 
-        uint256 callFeeToUser = wftmFee.mul(callFee).div(PERCENT_DIVISOR);
-        IERC20(wftm).safeTransfer(msg.sender, callFeeToUser);
+        if (wftmFee != 0) {
+            uint256 callFeeToUser = wftmFee.mul(callFee).div(PERCENT_DIVISOR);
+            IERC20(wftm).safeTransfer(msg.sender, callFeeToUser);
 
-        uint256 treasuryFeeToVault = wftmFee.mul(treasuryFee).div(PERCENT_DIVISOR);
-        IERC20(wftm).safeTransfer(treasury, treasuryFeeToVault);
+            uint256 treasuryFeeToVault = wftmFee.mul(treasuryFee).div(PERCENT_DIVISOR);
+            IERC20(wftm).safeTransfer(treasury, treasuryFeeToVault);
+        }
     }
 
     /**
@@ -264,16 +266,18 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      */
     function convertWftmToGeist() internal {
         uint256 wftmBal = IERC20(wftm).balanceOf(address(this));
-        IUniswapV2Router02(uniRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(
-            wftmBal, 0, wftmToGeistPath, address(this), block.timestamp.add(600)
-        );
+        if (wftmBal != 0) {
+            IUniswapV2Router02(uniRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                wftmBal, 0, wftmToGeistPath, address(this), block.timestamp.add(600)
+            );
+        }
     }
 
     /**
      * @dev Function to calculate the total underlying {geist} held by the strat.
      * It takes into account both the funds in hand, as the funds allocated in the Geist Staking contract.
      */
-    function balanceOf() public view returns (uint256) {
+    function balanceOf() external view returns (uint256) {
         return balanceOfGeist().add(balanceOfPool());
     }
 
@@ -309,7 +313,7 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
     /**
      * @dev Pauses deposits. Gets all withdrawable funds from the Geist Staking contract, leaving rewards behind
      */
-    function panic() public onlyOwner {
+    function panic() external onlyOwner {
         pause();
         (uint256 withdrawableBalance, ) = IGeistStaking(geistStaking).withdrawableBalance(address(this));
         IGeistStaking(geistStaking).withdraw(withdrawableBalance);
@@ -339,9 +343,9 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      * Should only be called when the strategy is not paused as we will also be giving allowances for
      * this new token within this function.
      */
-    function addRewardToken(address _token) external onlyOwner whenNotPaused returns (bool) {
+    function addRewardToken(address _token, address[] calldata _path) external onlyOwner whenNotPaused returns (bool) {
         rewardBaseTokens.push(_token);
-        pathForBaseRewardToken[_token] = [_token, wftm];
+        pathForBaseRewardToken[_token] = _path;
 
         IERC20(_token).safeApprove(uniRouter, 0);
         IERC20(_token).safeApprove(uniRouter, type(uint256).max);
