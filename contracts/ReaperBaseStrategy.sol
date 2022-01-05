@@ -15,6 +15,7 @@ abstract contract ReaperBaseStrategy is Pausable, Ownable {
         uint256 timestamp;
         uint256 profit;
         uint256 tvl; // doesn't include profit
+        uint256 timeSinceLastHarvest;
     }
 
     Harvest[] public harvestLog;
@@ -33,6 +34,7 @@ abstract contract ReaperBaseStrategy is Pausable, Ownable {
         Harvest memory logEntry;
         logEntry.timestamp = block.timestamp;
         logEntry.tvl = balanceOf();
+        logEntry.timeSinceLastHarvest = block.timestamp.sub(lastHarvestTimestamp);
 
         _harvestCore();
 
