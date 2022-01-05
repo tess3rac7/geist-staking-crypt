@@ -10,7 +10,6 @@ import "./interfaces/ILendingPoolAddressesProvider.sol";
 import "./interfaces/IUniswapV2Router02.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 /**
@@ -69,7 +68,6 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
     * lowered as necessary to provide users with the most competitive APY.
     *
     * {MAX_FEE} - Maximum fee allowed by the strategy. Hard-capped at 5%.
-    * {PERCENT_DIVISOR} - Constant used to safely calculate the correct percentages.
     */
 
     uint public callFee = 1000;
@@ -77,7 +75,6 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
     uint public securityFee = 10;
     uint public totalFee = 450;
     uint constant public MAX_FEE = 500;
-    uint constant  public PERCENT_DIVISOR = 10000;
 
     /**
      * @dev Paths used to swap tokens:
