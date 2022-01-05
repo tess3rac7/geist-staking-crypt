@@ -19,6 +19,7 @@ abstract contract ReaperBaseStrategy is Pausable, Ownable {
 
     Harvest[] public harvestLog;
     uint256 public harvestLogCadence = 12 hours;
+    uint256 public lastHarvestTimestamp;
 
     event StratHarvest(address indexed harvester);
 
@@ -41,6 +42,7 @@ abstract contract ReaperBaseStrategy is Pausable, Ownable {
             harvestLog.push(logEntry);
         }
 
+        lastHarvestTimestamp = block.timestamp;
         emit StratHarvest(msg.sender);
     }
 
