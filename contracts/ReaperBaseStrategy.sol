@@ -107,7 +107,7 @@ abstract contract ReaperBaseStrategy is Pausable, Ownable {
                 .profit
                 .mul(ONE_YEAR)
                 .div(harvestLog[i].timeSinceLastHarvest);
-            runningAPRSum.add(
+            runningAPRSum = runningAPRSum.add(
                 projectedYearlyProfit.mul(PERCENT_DIVISOR).div(
                     harvestLog[i].tvl
                 )
@@ -144,7 +144,7 @@ abstract contract ReaperBaseStrategy is Pausable, Ownable {
                 .profit
                 .mul(ONE_YEAR)
                 .div(harvestLog[i].timeSinceLastHarvest);
-            runningAPRSum.add(
+            runningAPRSum = runningAPRSum.add(
                 projectedYearlyProfit.mul(PERCENT_DIVISOR).div(
                     harvestLog[i].tvl
                 )
