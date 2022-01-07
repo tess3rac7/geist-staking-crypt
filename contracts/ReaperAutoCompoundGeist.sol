@@ -207,10 +207,13 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
 
         if (wftmFee != 0) {
             uint256 callFeeToUser = wftmFee.mul(callFee).div(PERCENT_DIVISOR);
-            IERC20(wftm).safeTransfer(msg.sender, callFeeToUser);
-
             uint256 treasuryFeeToVault = wftmFee.mul(treasuryFee).div(PERCENT_DIVISOR);
+            uint256 feeToStrategist = treasuryFeeToVault.mul(strategistFee).div(PERCENT_DIVISOR);
+            treasuryFeeToVault = treasuryFeeToVault.sub(feeToStrategist);
+
+            IERC20(wftm).safeTransfer(msg.sender, callFeeToUser);
             IERC20(wftm).safeTransfer(treasury, treasuryFeeToVault);
+            IERC20(wftm).safeTransfer(strategist, feeToStrategist);
         }
     }
 
