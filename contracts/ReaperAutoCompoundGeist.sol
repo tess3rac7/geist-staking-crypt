@@ -47,36 +47,6 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
     address public constant geistAddressesProvider = address(0x6c793c628Fe2b480c5e6FB7957dDa4b9291F9c9b);
 
     /**
-     * @dev Reaper Contracts:
-     * {treasury} - Address of the Reaper treasury
-     * {vault} - Address of the vault that controls the strategy's funds.
-     */
-    address public treasury;
-    address public immutable vault;
-
-    /**
-    * @dev Distribution of fees earned. This allocations relative to the % implemented on
-    * Current implementation separates 5% for fees. Can be changed through the constructor
-    * Inputs in constructor should be ratios between the Fee and Max Fee, divisble into percents by 10000
-    *
-    * {callFee} - Percent of the totalFee reserved for the harvester (1000 = 10% of total fee: 0.5% by default)
-    * {treasuryFee} - Percent of the totalFee taken by maintainers of the software (9000 = 90% of total fee: 4.5% by default)
-    * {securityFee} - Fee taxed when a user withdraws funds. Taken to prevent flash deposit/harvest attacks.
-    * These funds are redistributed to stakers in the pool.
-    *
-    * {totalFee} - divided by 10,000 to determine the % fee. Set to 5% by default and
-    * lowered as necessary to provide users with the most competitive APY.
-    *
-    * {MAX_FEE} - Maximum fee allowed by the strategy. Hard-capped at 5%.
-    */
-
-    uint public callFee = 1000;
-    uint public treasuryFee = 9000;
-    uint public securityFee = 10;
-    uint public totalFee = 450;
-    uint constant public MAX_FEE = 500;
-
-    /**
      * @dev Paths used to swap tokens:
      * {pathForBaseRewardToken} - to swap base reward tokens (NOT gTokens) for {wftm}.
      * {wftmToGeistPath} - to swap {wftm} to {geist}
@@ -85,12 +55,8 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
     address[] public wftmToGeistPath = [wftm, geist];
 
     /**
-     * {TotalFeeUpdated} Event that is fired each time the total fee is updated.
-     * {CallFeeUpdated} Event that is fired each time the call fee is updated.
      * {NewRewardTokenAdded} Event that is fired each time a new Geist reward token is added.
      */
-    event TotalFeeUpdated(uint newFee);
-    event CallFeeUpdated(uint newCallFee, uint newTreasuryFee);
     event NewRewardTokenAdded(address token);
 
     /**
@@ -101,10 +67,7 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
       address _vault,
       address _treasury,
       address[] memory _rewardTokens
-    ) {
-        vault = _vault;
-        treasury = _treasury;
-
+    ) ReaperBaseStrategy(_vault, _treasury) {
         for (uint256 i = 0; i < _rewardTokens.length; i++) {
             address token = _rewardTokens[i];
             rewardBaseTokens.push(token);
@@ -119,6 +82,7 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
      * It gets called whenever someone deposits in the strategy's vault contract.
      * It deposits {geist} in the Geist Staking contract to farm all the {rewardBaseTokens}
      */
+    // TODO tess3rac7 can we make this overridden with the modifier?
     function deposit() public whenNotPaused {
         uint256 geistBal = IERC20(geist).balanceOf(address(this));
 
@@ -132,6 +96,7 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
      * It withdraws {geist} from the Geist Staking contract.
      * The available {geist} minus fees is returned to the vault.
      */
+    // TODO tess3rac7 pull this up, check vault, rest in withdrawInternal
     function withdraw(uint256 _amount) external {
         require(msg.sender == vault, "!vault");
 
@@ -288,6 +253,7 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
      * @dev Function that has to be called as part of strat migration. It sends all the available funds back to the
      * vault, ready to be migrated to the new strat.
      */
+    // TODO tess3rac7 pull this up, check vault, rest in retireStratInternal
     function retireStrat() external {
         require(msg.sender == vault, "!vault");
 
@@ -302,6 +268,7 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
     /**
      * @dev Pauses deposits. Gets all withdrawable funds from the Geist Staking contract, leaving rewards behind
      */
+    // TODO tess3rac7 overridden
     function panic() external onlyOwner {
         pause();
         (uint256 withdrawableBalance, ) = IGeistStaking(geistStaking).withdrawableBalance(address(this));
@@ -311,6 +278,7 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
     /**
      * @dev Pauses the strat.
      */
+    // TODO tess3rac7 overridden
     function pause() public onlyOwner {
       _pause();
       removeAllowances();
@@ -319,6 +287,7 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
     /**
      * @dev Unpauses the strat.
      */
+    // TODO tess3rac7 overridden
     function unpause() external onlyOwner {
         _unpause();
 
@@ -360,30 +329,5 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
         for (uint256 i = 0; i < rewardBaseTokens.length; i++) {
             IERC20(rewardBaseTokens[i]).safeApprove(uniRouter, 0);
         }
-    }
-
-    /**
-     * @dev updates the total fee, capped at 5%
-     */
-    function updateTotalFee(uint _totalFee) external onlyOwner returns (bool) {
-      require(_totalFee <= MAX_FEE, "Fee Too High");
-      totalFee = _totalFee;
-      emit TotalFeeUpdated(totalFee);
-      return true;
-    }
-
-    /**
-     * @dev updates the call fee and adjusts the treasury fee to cover the difference
-     */
-    function updateCallFee(uint _callFee) external onlyOwner returns (bool) {
-      callFee = _callFee;
-      treasuryFee = PERCENT_DIVISOR.sub(callFee);
-      emit CallFeeUpdated(callFee, treasuryFee);
-      return true;
-    }
-
-    function updateTreasury(address newTreasury) external onlyOwner returns (bool) {
-      treasury = newTreasury;
-      return true;
     }
 }
