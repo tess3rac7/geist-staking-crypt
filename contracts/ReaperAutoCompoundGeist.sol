@@ -2,16 +2,14 @@
 
 pragma solidity ^0.8.0;
 
+import "./ReaperBaseStrategy.sol";
 import "./interfaces/IAToken.sol";
 import "./interfaces/IGeistStaking.sol";
 import "./interfaces/ILendingPool.sol";
 import "./interfaces/ILendingPoolAddressesProvider.sol";
 import "./interfaces/IUniswapV2Router02.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 /**
@@ -23,9 +21,8 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
  * 
  * Expect the amount of Geist tokens you have deposited to grow over time.
  */
-contract ReaperAutoCompoundGeist is Ownable, Pausable {
+contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
     using SafeERC20 for IERC20;
-    using Address for address;
     using SafeMath for uint256;
 
     /**
@@ -71,7 +68,6 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
     * lowered as necessary to provide users with the most competitive APY.
     *
     * {MAX_FEE} - Maximum fee allowed by the strategy. Hard-capped at 5%.
-    * {PERCENT_DIVISOR} - Constant used to safely calculate the correct percentages.
     */
 
     uint public callFee = 1000;
@@ -79,7 +75,6 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
     uint public securityFee = 10;
     uint public totalFee = 450;
     uint constant public MAX_FEE = 500;
-    uint constant  public PERCENT_DIVISOR = 10000;
 
     /**
      * @dev Paths used to swap tokens:
@@ -90,12 +85,10 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
     address[] public wftmToGeistPath = [wftm, geist];
 
     /**
-     * {StratHarvest} Event that is fired each time someone harvests the strat.
      * {TotalFeeUpdated} Event that is fired each time the total fee is updated.
      * {CallFeeUpdated} Event that is fired each time the call fee is updated.
      * {NewRewardTokenAdded} Event that is fired each time a new Geist reward token is added.
      */
-    event StratHarvest(address indexed harvester);
     event TotalFeeUpdated(uint newFee);
     event CallFeeUpdated(uint newCallFee, uint newTreasuryFee);
     event NewRewardTokenAdded(address token);
@@ -165,22 +158,18 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      * 3. It charges the system fees out of the newly earned wFTM tokens.
      * 4. It swaps the remaining wFTM into Geist and deposits it back into the staking contract.
      */
-    function harvest() external whenNotPaused {
-        require(!Address.isContract(msg.sender), "!contract");
-
+    function _harvestCore() override internal {
         claimRewardsAndSwapToWftm();
         chargeFees();
         convertWftmToGeist();
         deposit();
-
-        emit StratHarvest(msg.sender);
     }
 
     /**
      * @dev Returns the approx amount of profit from harvesting.
      *      Profit is denominated in WFTM, and takes fees into account.
      */
-    function estimateHarvest() external view returns (uint256 profit, uint256 callFeeToUser) {
+    function estimateHarvest() external view override returns (uint256 profit, uint256 callFeeToUser) {
         IGeistStaking.RewardData[] memory rewardDataArray =  IGeistStaking(geistStaking).claimableRewards(address(this));
         for (uint256 i = 0; i < rewardDataArray.length; i++) {
             // Geist rewards not applicable since we're not locking
@@ -277,7 +266,7 @@ contract ReaperAutoCompoundGeist is Ownable, Pausable {
      * @dev Function to calculate the total underlying {geist} held by the strat.
      * It takes into account both the funds in hand, as the funds allocated in the Geist Staking contract.
      */
-    function balanceOf() external view returns (uint256) {
+    function balanceOf() public view override returns (uint256) {
         return balanceOfGeist().add(balanceOfPool());
     }
 
