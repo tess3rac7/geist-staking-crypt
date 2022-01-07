@@ -66,8 +66,9 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
     constructor (
       address _vault,
       address _treasury,
+      address _strategist,
       address[] memory _rewardTokens
-    ) ReaperBaseStrategy(_vault, _treasury) {
+    ) ReaperBaseStrategy(_vault, _treasury, _strategist) {
         for (uint256 i = 0; i < _rewardTokens.length; i++) {
             address token = _rewardTokens[i];
             rewardBaseTokens.push(token);

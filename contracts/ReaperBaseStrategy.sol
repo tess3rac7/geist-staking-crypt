@@ -26,47 +26,65 @@ abstract contract ReaperBaseStrategy is Pausable, Ownable {
     uint256 public lastHarvestTimestamp;
 
     /**
-     * @dev Reaper Contracts:
+     * @dev Reaper roles:
      * {treasury} - Address of the Reaper treasury
      * {vault} - Address of the vault that controls the strategy's funds.
+     * {strategist} - Address of entity that designed and built the strategy.
      */
     address public treasury;
     address public immutable vault;
+    address public strategist;
 
     /**
-     * @dev Distribution of fees earned. This allocations relative to the % implemented on
-     * Current implementation separates 5% for fees. Can be changed through the constructor
-     * Inputs in constructor should be ratios between the Fee and Max Fee, divisble into percents by 10000
-     *
-     * {callFee} - Percent of the totalFee reserved for the harvester (1000 = 10% of total fee: 0.5% by default)
-     * {treasuryFee} - Percent of the totalFee taken by maintainers of the software (9000 = 90% of total fee: 4.5% by default)
-     * {securityFee} - Fee taxed when a user withdraws funds. Taken to prevent flash deposit/harvest attacks.
-     * These funds are redistributed to stakers in the pool.
-     *
-     * {totalFee} - divided by 10,000 to determine the % fee. Set to 5% by default and
+     * Fee related constants:
+     * {MAX_FEE} - Maximum fee allowed by the strategy. Hard-capped at 5%.
+     * {STRATEGIST_MAX_FEE} - Maximum strategist fee allowed by the strategy (as % of treasury fee).
+     *                        Hard-capped at 50%
+     */
+    uint256 public constant MAX_FEE = 500;
+    uint256 public constant STRATEGIST_MAX_FEE = 5000;
+
+    /**
+     * @dev Distribution of fees earned, expressed as % of the profit from each harvest.
+     * {totalFee} - divided by 10,000 to determine the % fee. Set to 4.5% by default and
      * lowered as necessary to provide users with the most competitive APY.
      *
-     * {MAX_FEE} - Maximum fee allowed by the strategy. Hard-capped at 5%.
+     * {callFee} - Percent of the totalFee reserved for the harvester (1000 = 10% of total fee: 0.45% by default)
+     * {treasuryFee} - Percent of the totalFee taken by maintainers of the software (9000 = 90% of total fee: 4.05% by default)
+     * {strategistFee} - Percent of the treasuryFee taken by strategist (2500 = 25% of treasury fee: 1.0125% by default)
+     *
+     * {securityFee} - Fee taxed when a user withdraws funds. Taken to prevent flash deposit/harvest attacks.
+     * These funds are redistributed to stakers in the pool.
      */
-
+    uint256 public totalFee = 450;
     uint256 public callFee = 1000;
     uint256 public treasuryFee = 9000;
+    uint256 public strategistFee = 2500;
     uint256 public securityFee = 10;
-    uint256 public totalFee = 450;
-    uint256 public constant MAX_FEE = 500;
 
     /**
      * {TotalFeeUpdated} Event that is fired each time the total fee is updated.
-     * {CallFeeUpdated} Event that is fired each time the call fee is updated.
+     * {FeesUpdated} Event that is fired each time callFee+treasuryFee+strategistFee are updated.
      * {StratHarvest} Event that is fired each time the strategy gets harvested.
+     * {StrategistUpdated} Event that is fired each time the strategist role is updated.
      */
     event TotalFeeUpdated(uint256 newFee);
-    event CallFeeUpdated(uint256 newCallFee, uint256 newTreasuryFee);
+    event FeesUpdated(
+        uint256 newCallFee,
+        uint256 newTreasuryFee,
+        uint256 newStrategistFee
+    );
     event StratHarvest(address indexed harvester);
+    event StrategistUpdated(address newStrategist);
 
-    constructor(address _vault, address _treasury) {
+    constructor(
+        address _vault,
+        address _treasury,
+        address _strategist
+    ) {
         vault = _vault;
         treasury = _treasury;
+        strategist = _strategist;
     }
 
     /**
@@ -220,12 +238,30 @@ abstract contract ReaperBaseStrategy is Pausable, Ownable {
     }
 
     /**
-     * @dev updates the call fee and adjusts the treasury fee to cover the difference
+     * @dev updates the call fee, treasury fee, and strategist fee
+     *      call Fee + treasury Fee must add up to PERCENT_DIVISOR
+     *
+     *      strategist fee is expressed as % of the treasury fee and
+     *      must be no more than STRATEGIST_MAX_FEE
      */
-    function updateCallFee(uint256 _callFee) external onlyOwner returns (bool) {
+    function updateFees(
+        uint256 _callFee,
+        uint256 _treasuryFee,
+        uint256 _strategistFee
+    ) external onlyOwner returns (bool) {
+        require(
+            _callFee.add(_treasuryFee) == PERCENT_DIVISOR,
+            "sum != PERCENT_DIVISOR"
+        );
+        require(
+            _strategistFee <= STRATEGIST_MAX_FEE,
+            "strategist fee > STRATEGIST_MAX_FEE"
+        );
+
         callFee = _callFee;
-        treasuryFee = PERCENT_DIVISOR.sub(callFee);
-        emit CallFeeUpdated(callFee, treasuryFee);
+        treasuryFee = _treasuryFee;
+        strategistFee = _strategistFee;
+        emit FeesUpdated(callFee, treasuryFee, strategistFee);
         return true;
     }
 
@@ -236,6 +272,27 @@ abstract contract ReaperBaseStrategy is Pausable, Ownable {
     {
         treasury = newTreasury;
         return true;
+    }
+
+    /**
+     * @dev Updates the current strategist.
+     *      This may only be called by owner or the existing strategist.
+     */
+    function updateStrategist(address _newStrategist) external {
+        _onlyStrategistOrOwner();
+        require(_newStrategist != address(0), "!0");
+        strategist = _newStrategist;
+        emit StrategistUpdated(_newStrategist);
+    }
+
+    /**
+     * @dev Only allow access to strategist or owner
+     */
+    function _onlyStrategistOrOwner() internal view {
+        require(
+            msg.sender == strategist || msg.sender == owner(),
+            "Not authorized"
+        );
     }
 
     /**
