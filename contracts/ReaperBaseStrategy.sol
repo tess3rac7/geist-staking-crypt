@@ -8,7 +8,6 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 abstract contract ReaperBaseStrategy is Pausable, Ownable {
-    using Address for address;
     using SafeMath for uint256;
 
     uint256 public constant PERCENT_DIVISOR = 10_000;
@@ -88,12 +87,10 @@ abstract contract ReaperBaseStrategy is Pausable, Ownable {
     }
 
     /**
-     * @dev harvest() function that takes care of logging. Subclasses should
+     * @dev harvest() function that takes care of logging. Subcontracts should
      *      override _harvestCore() and implement their specific logic in it.
      */
     function harvest() external whenNotPaused {
-        require(!Address.isContract(msg.sender), "!contract");
-
         Harvest memory logEntry;
         logEntry.timestamp = block.timestamp;
         logEntry.tvl = balanceOf();
