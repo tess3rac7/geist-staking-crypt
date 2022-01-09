@@ -65,10 +65,10 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
      */
     constructor (
       address _vault,
-      address _treasury,
-      address _strategist,
+      address[] memory _feeRemitters,
+      address[] memory _strategists,
       address[] memory _rewardTokens
-    ) ReaperBaseStrategy(_vault, _treasury, _strategist) {
+    ) ReaperBaseStrategy(_vault, _feeRemitters, _strategists) {
         for (uint256 i = 0; i < _rewardTokens.length; i++) {
             address token = _rewardTokens[i];
             rewardBaseTokens.push(token);
@@ -213,7 +213,7 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
 
             IERC20(wftm).safeTransfer(msg.sender, callFeeToUser);
             IERC20(wftm).safeTransfer(treasury, treasuryFeeToVault);
-            IERC20(wftm).safeTransfer(strategist, feeToStrategist);
+            IERC20(wftm).safeTransfer(strategistRemitter, feeToStrategist);
         }
     }
 
@@ -271,28 +271,32 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
 
     /**
      * @dev Pauses deposits. Gets all withdrawable funds from the Geist Staking contract, leaving rewards behind
+     *      Can only be called by strategist or owner.
      */
     // TODO tess3rac7 overridden
-    function panic() external onlyOwner {
+    function panic() external {
+        _onlyStrategistOrOwner();
         pause();
         (uint256 withdrawableBalance, ) = IGeistStaking(geistStaking).withdrawableBalance(address(this));
         IGeistStaking(geistStaking).withdraw(withdrawableBalance);
     }
 
     /**
-     * @dev Pauses the strat.
+     * @dev Pauses the strat. Can only be called by strategist or owner.
      */
     // TODO tess3rac7 overridden
-    function pause() public onlyOwner {
+    function pause() public {
+      _onlyStrategistOrOwner();
       _pause();
       removeAllowances();
     }
 
     /**
-     * @dev Unpauses the strat.
+     * @dev Unpauses the strat. Can only be called by strategist or owner.
      */
     // TODO tess3rac7 overridden
-    function unpause() external onlyOwner {
+    function unpause() external {
+        _onlyStrategistOrOwner();
         _unpause();
 
         giveAllowances();
@@ -303,9 +307,10 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
     /**
      * @dev Add a new reward token if Geist ever adds a new market that pays rewards to stakers.
      * Should only be called when the strategy is not paused as we will also be giving allowances for
-     * this new token within this function.
+     * this new token within this function. Can only be called by strategist or owner.
      */
-    function addRewardToken(address _token, address[] calldata _path) external onlyOwner whenNotPaused returns (bool) {
+    function addRewardToken(address _token, address[] calldata _path) external whenNotPaused returns (bool) {
+        _onlyStrategistOrOwner();
         rewardBaseTokens.push(_token);
         pathForBaseRewardToken[_token] = _path;
 
