@@ -102,24 +102,25 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable {
      *      override _harvestCore() and implement their specific logic in it.
      */
     function harvest() external whenNotPaused {
-        Harvest memory logEntry;
-        logEntry.timestamp = block.timestamp;
-        logEntry.tvl = balanceOf();
-        logEntry.timeSinceLastHarvest = block.timestamp.sub(
-            lastHarvestTimestamp
-        );
+        uint256 startingTvl = balanceOf();
 
         _harvestCore();
 
-        logEntry.profit = balanceOf().sub(logEntry.tvl);
         if (
             harvestLog.length == 0 ||
             harvestLog[harvestLog.length - 1].timestamp.add(
                 harvestLogCadence
             ) <=
-            logEntry.timestamp
+            block.timestamp
         ) {
-            harvestLog.push(logEntry);
+            harvestLog.push(
+                Harvest({
+                    timestamp: block.timestamp,
+                    profit: balanceOf() - startingTvl,
+                    tvl: startingTvl,
+                    timeSinceLastHarvest: block.timestamp - lastHarvestTimestamp
+                })
+            );
         }
 
         lastHarvestTimestamp = block.timestamp;
