@@ -259,9 +259,16 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
     /**
      * @dev pass in max value of uint to effectively remove TVL cap
      */
-    function updateTvlCap(uint256 _newTvlCap) external onlyOwner {
+    function updateTvlCap(uint256 _newTvlCap) public onlyOwner {
         tvlCap = _newTvlCap;
         emit TvlCapUpdated(tvlCap);
+    }
+
+    /**
+     * @dev helper function to remove TVL cap
+     */
+    function removeTvlCap() external onlyOwner {
+        updateTvlCap(type(uint256).max);
     }
 
     /**
