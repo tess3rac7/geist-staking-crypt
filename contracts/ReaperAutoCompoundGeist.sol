@@ -7,6 +7,7 @@ import "./interfaces/IAToken.sol";
 import "./interfaces/IGeistStaking.sol";
 import "./interfaces/ILendingPool.sol";
 import "./interfaces/ILendingPoolAddressesProvider.sol";
+import "./interfaces/IPaymentRouter.sol";
 import "./interfaces/IUniswapV2Router02.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -213,7 +214,8 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
 
             IERC20(wftm).safeTransfer(msg.sender, callFeeToUser);
             IERC20(wftm).safeTransfer(treasury, treasuryFeeToVault);
-            IERC20(wftm).safeTransfer(strategistRemitter, feeToStrategist);
+            IERC20(wftm).safeApprove(strategistRemitter, feeToStrategist);
+            IPaymentRouter(strategistRemitter).routePayment(wftm, feeToStrategist);
         }
     }
 

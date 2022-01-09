@@ -28,12 +28,15 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable {
      * Reaper Roles
      */
     bytes32 public constant STRATEGIST = keccak256("STRATEGIST");
+    bytes32 public constant STRATEGIST_MULTISIG =
+        keccak256("STRATEGIST_MULTISIG");
 
     /**
      * @dev Reaper contracts:
      * {treasury} - Address of the Reaper treasury
      * {vault} - Address of the vault that controls the strategy's funds.
      * {strategistRemitter} - Address where strategist fee is remitted to.
+     *                        Must be an IPaymentRouter contract.
      */
     address public treasury;
     address public immutable vault;
@@ -292,14 +295,14 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable {
     /**
      * @dev Updates the current strategistRemitter.
      *      If there is only one strategist this function may be called by
-     *      the strategist or owner. However if there are multiple strategists
-     *      this function may only be called by the owner.
+     *      that strategist. However if there are multiple strategists
+     *      this function may only be called by the STRATEGIST_MULTISIG role.
      */
     function updateStrategistRemitter(address _newStrategistRemitter) external {
         if (getRoleMemberCount(STRATEGIST) == 1) {
-            _onlyStrategistOrOwner();
+            _checkRole(STRATEGIST, msg.sender);
         } else {
-            _checkRole(DEFAULT_ADMIN_ROLE, msg.sender);
+            _checkRole(STRATEGIST_MULTISIG, msg.sender);
         }
 
         require(_newStrategistRemitter != address(0), "!0");
