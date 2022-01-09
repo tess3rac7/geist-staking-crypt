@@ -84,7 +84,6 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
      * It gets called whenever someone deposits in the strategy's vault contract.
      * It deposits {geist} in the Geist Staking contract to farm all the {rewardBaseTokens}
      */
-    // TODO tess3rac7 can we make this overridden with the modifier?
     function deposit() public whenNotPaused {
         uint256 geistBal = IERC20(geist).balanceOf(address(this));
 
@@ -98,7 +97,6 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
      * It withdraws {geist} from the Geist Staking contract.
      * The available {geist} minus fees is returned to the vault.
      */
-    // TODO tess3rac7 pull this up, check vault, rest in withdrawInternal
     function withdraw(uint256 _amount) external {
         require(msg.sender == vault, "!vault");
 
@@ -259,7 +257,6 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
      * @dev Function that has to be called as part of strat migration. It sends all the available funds back to the
      * vault, ready to be migrated to the new strat.
      */
-    // TODO tess3rac7 pull this up, check vault, rest in retireStratInternal
     function retireStrat() external {
         require(msg.sender == vault, "!vault");
 
@@ -275,7 +272,6 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
      * @dev Pauses deposits. Gets all withdrawable funds from the Geist Staking contract, leaving rewards behind
      *      Can only be called by strategist or owner.
      */
-    // TODO tess3rac7 overridden
     function panic() external {
         _onlyStrategistOrOwner();
         pause();
@@ -286,7 +282,6 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
     /**
      * @dev Pauses the strat. Can only be called by strategist or owner.
      */
-    // TODO tess3rac7 overridden
     function pause() public {
       _onlyStrategistOrOwner();
       _pause();
@@ -296,7 +291,6 @@ contract ReaperAutoCompoundGeist is ReaperBaseStrategy {
     /**
      * @dev Unpauses the strat. Can only be called by strategist or owner.
      */
-    // TODO tess3rac7 overridden
     function unpause() external {
         _onlyStrategistOrOwner();
         _unpause();
