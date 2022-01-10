@@ -3,7 +3,6 @@
 pragma solidity ^0.8.0;
 
 interface IGeistStaking {
-
     /* ========== STATE VARIABLES ========== */
 
     struct Reward {
@@ -32,47 +31,59 @@ interface IGeistStaking {
 
     /* ========== VIEWS ========== */
 
-    function lastTimeRewardApplicable(address _rewardsToken) external view returns (uint256);
+    function lastTimeRewardApplicable(address _rewardsToken)
+        external
+        view
+        returns (uint256);
 
-    function rewardPerToken(address _rewardsToken) external view returns (uint256);
+    function rewardPerToken(address _rewardsToken)
+        external
+        view
+        returns (uint256);
 
-    function getRewardForDuration(address _rewardsToken) external view returns (uint256);
+    function getRewardForDuration(address _rewardsToken)
+        external
+        view
+        returns (uint256);
 
     // Address and claimable amount of all reward tokens for the given account
-    function claimableRewards(address account) external view returns (RewardData[] memory rewards);
+    function claimableRewards(address account)
+        external
+        view
+        returns (RewardData[] memory rewards);
 
     // Total balance of an account, including unlocked, locked and earned tokens
-    function totalBalance(address user) view external returns (uint256 amount);
+    function totalBalance(address user) external view returns (uint256 amount);
 
     // Total withdrawable balance for an account to which no penalty is applied
-    function unlockedBalance(address user) view external returns (uint256 amount);
+    function unlockedBalance(address user)
+        external
+        view
+        returns (uint256 amount);
 
     // Information on the "earned" balances of a user
     // Earned balances may be withdrawn immediately for a 50% penalty
-    function earnedBalances(
-        address user
-    ) view external returns (
-        uint256 total,
-        LockedBalance[] memory earningsData
-    );
+    function earnedBalances(address user)
+        external
+        view
+        returns (uint256 total, LockedBalance[] memory earningsData);
 
     // Information on a user's locked balances
-    function lockedBalances(
-        address user
-    ) view external returns (
-        uint256 total,
-        uint256 unlockable,
-        uint256 locked,
-        LockedBalance[] memory lockData
-    );
+    function lockedBalances(address user)
+        external
+        view
+        returns (
+            uint256 total,
+            uint256 unlockable,
+            uint256 locked,
+            LockedBalance[] memory lockData
+        );
 
     // Final balance received and penalty balance paid by user upon calling exit
-    function withdrawableBalance(
-        address user
-    ) view external returns (
-        uint256 amount,
-        uint256 penaltyAmount
-    );
+    function withdrawableBalance(address user)
+        external
+        view
+        returns (uint256 amount, uint256 penaltyAmount);
 
     /* ========== MUTATIVE FUNCTIONS ========== */
 
@@ -83,7 +94,11 @@ interface IGeistStaking {
     // Mint new tokens
     // Minted tokens receive rewards normally but incur a 50% penalty when
     // withdrawn before lockDuration has passed.
-    function mint(address user, uint256 amount, bool withPenalty) external;
+    function mint(
+        address user,
+        uint256 amount,
+        bool withPenalty
+    ) external;
 
     // Withdraw staked tokens
     // First withdraws unlocked tokens, then earned tokens. Withdrawing earned tokens
