@@ -41,11 +41,11 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable {
 
     /**
      * Fee related constants:
-     * {MAX_FEE} - Maximum fee allowed by the strategy. Hard-capped at 5%.
+     * {MAX_FEE} - Maximum fee allowed by the strategy. Hard-capped at 10%.
      * {STRATEGIST_MAX_FEE} - Maximum strategist fee allowed by the strategy (as % of treasury fee).
      *                        Hard-capped at 50%
      */
-    uint256 public constant MAX_FEE = 500;
+    uint256 public constant MAX_FEE = 1000;
     uint256 public constant STRATEGIST_MAX_FEE = 5000;
 
     /**
