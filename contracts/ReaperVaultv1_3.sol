@@ -6,10 +6,7 @@ import "./interfaces/IStrategy.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 /**
  * @dev Implementation of a vault to deposit funds for yield optimizing.
@@ -18,11 +15,10 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
  */
 contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
-    using SafeMath for uint256;
 
     struct StratCandidate {
         address implementation;
-        uint proposedTime;
+        uint256 proposedTime;
     }
 
     // The last proposed strategy to switch to.
@@ -35,11 +31,11 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
     uint256 public tvlCap;
 
     /**
-    * @dev The stretegy's initialization status. Gives deployer 20 minutes after contract
-    * construction (constructionTime) to set the strategy implementation.
-    */
+     * @dev The stretegy's initialization status. Gives deployer 20 minutes after contract
+     * construction (constructionTime) to set the strategy implementation.
+     */
     bool public initialized = false;
-    uint public constructionTime;
+    uint256 public constructionTime;
 
     // The token the vault accepts and looks to maximize.
     IERC20 public token;
@@ -65,22 +61,22 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
      * are not liable for any financial losses you might incur as a direct or indirect
      * result of investing in any of the pools on the platform.
      */
-    mapping (address => bool) public hasReadAndAcceptedTerms;
+    mapping(address => bool) public hasReadAndAcceptedTerms;
 
     /**
      * @dev simple mappings used to determine PnL denominated in LP tokens,
      * as well as keep a generalized history of a user's protocol usage.
      */
-    mapping (address => uint) public cumulativeDeposits;
-    mapping (address => uint) public cumulativeWithdrawals;
+    mapping(address => uint256) public cumulativeDeposits;
+    mapping(address => uint256) public cumulativeWithdrawals;
 
     event NewStratCandidate(address implementation);
     event UpgradeStrat(address implementation);
     event TermsAccepted(address user);
     event TvlCapUpdated(uint256 newTvlCap);
 
-    event DepositsIncremented(address user, uint amount, uint total);
-    event WithdrawalsIncremented(address user, uint amount, uint total);
+    event DepositsIncremented(address user, uint256 amount, uint256 total);
+    event WithdrawalsIncremented(address user, uint256 amount, uint256 total);
 
     /**
      * @dev Sets the value of {token} to the token that the vault will
@@ -92,17 +88,14 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
      * @param _symbol the symbol of the vault token.
      * @param _approvalDelay the delay before a new strat can be approved.
      */
-    constructor (
+    constructor(
         address _token,
         string memory _name,
         string memory _symbol,
         uint256 _approvalDelay,
         uint256 _depositFee,
         uint256 _tvlCap
-    ) ERC20(
-        string(_name),
-        string(_symbol)
-    ) {
+    ) ERC20(string(_name), string(_symbol)) {
         token = IERC20(_token);
         approvalDelay = _approvalDelay;
         constructionTime = block.timestamp;
@@ -118,7 +111,10 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
 
     function initialize(address _strategy) public onlyOwner returns (bool) {
         require(!initialized, "Contract is already initialized.");
-        require(block.timestamp <= (constructionTime + 1200), "initialization period over, use timelock");
+        require(
+            block.timestamp <= (constructionTime + 1200),
+            "initialization period over, use timelock"
+        );
         strategy = _strategy;
         initialized = true;
         return true;
@@ -130,7 +126,10 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
      */
 
     function agreeToTerms() public returns (bool) {
-        require(!hasReadAndAcceptedTerms[msg.sender], "you have already accepted the terms");
+        require(
+            !hasReadAndAcceptedTerms[msg.sender],
+            "you have already accepted the terms"
+        );
         hasReadAndAcceptedTerms[msg.sender] = true;
         emit TermsAccepted(msg.sender);
         return true;
@@ -141,8 +140,8 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
      * It takes into account the vault contract balance, the strategy contract balance
      *  and the balance deployed in other contracts as part of the strategy.
      */
-    function balance() public view returns (uint) {
-        return token.balanceOf(address(this)).add(IStrategy(strategy).balanceOf());
+    function balance() public view returns (uint256) {
+        return token.balanceOf(address(this)) + IStrategy(strategy).balanceOf();
     }
 
     /**
@@ -160,7 +159,7 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
      * Returns an uint256 with 18 decimals of how much underlying asset one vault share represents.
      */
     function getPricePerFullShare() public view returns (uint256) {
-        return totalSupply() == 0 ? 1e18 : balance().mul(1e18).div(totalSupply());
+        return totalSupply() == 0 ? 1e18 : (balance() * 1e18) / totalSupply();
     }
 
     /**
@@ -178,21 +177,22 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
      * @notice to ensure 'owner' can't sneak an implementation past the timelock,
      * it's set to true
      */
-    function deposit(uint _amount) public nonReentrant {
+    function deposit(uint256 _amount) public nonReentrant {
         require(_amount != 0, "please provide amount");
         uint256 _pool = balance();
-        require(_pool.add(_amount) <= tvlCap, "vault is full!");
+        require(_pool + _amount <= tvlCap, "vault is full!");
 
         uint256 _before = token.balanceOf(address(this));
         token.safeTransferFrom(msg.sender, address(this), _amount);
         uint256 _after = token.balanceOf(address(this));
-        _amount = _after.sub(_before);
-        uint256 _amountAfterDeposit = (_amount.mul(PERCENT_DIVISOR.sub(depositFee))).div(PERCENT_DIVISOR);
+        _amount = _after - _before;
+        uint256 _amountAfterDeposit = (_amount *
+            (PERCENT_DIVISOR - depositFee)) / PERCENT_DIVISOR;
         uint256 shares = 0;
         if (totalSupply() == 0) {
             shares = _amountAfterDeposit;
         } else {
-            shares = (_amountAfterDeposit.mul(totalSupply())).div(_pool);
+            shares = (_amountAfterDeposit * totalSupply()) / _pool;
         }
         _mint(msg.sender, shares);
         earn();
@@ -204,7 +204,7 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
      * by the vault's deposit() function.
      */
     function earn() public {
-        uint _bal = available();
+        uint256 _bal = available();
         token.safeTransfer(strategy, _bal);
         IStrategy(strategy).deposit();
     }
@@ -223,17 +223,17 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
      */
     function withdraw(uint256 _shares) public nonReentrant {
         require(_shares > 0, "please provide amount");
-        uint256 r = (balance().mul(_shares)).div(totalSupply());
+        uint256 r = (balance() * _shares) / totalSupply();
         _burn(msg.sender, _shares);
 
-        uint b = token.balanceOf(address(this));
+        uint256 b = token.balanceOf(address(this));
         if (b < r) {
-            uint _withdraw = r.sub(b);
+            uint256 _withdraw = r - b;
             IStrategy(strategy).withdraw(_withdraw);
-            uint _after = token.balanceOf(address(this));
-            uint _diff = _after.sub(b);
+            uint256 _after = token.balanceOf(address(this));
+            uint256 _diff = _after - b;
             if (_diff < _withdraw) {
-                r = b.add(_diff);
+                r = b + _diff;
             }
         }
         token.safeTransfer(msg.sender, r);
@@ -248,7 +248,7 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
         stratCandidate = StratCandidate({
             implementation: _implementation,
             proposedTime: block.timestamp
-         });
+        });
         emit NewStratCandidate(_implementation);
     }
 
@@ -278,8 +278,14 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
      */
 
     function upgradeStrat() public onlyOwner {
-        require(stratCandidate.implementation != address(0), "There is no candidate");
-        require(stratCandidate.proposedTime.add(approvalDelay) < block.timestamp, "Delay has not passed");
+        require(
+            stratCandidate.implementation != address(0),
+            "There is no candidate"
+        );
+        require(
+            stratCandidate.proposedTime + approvalDelay < block.timestamp,
+            "Delay has not passed"
+        );
 
         emit UpgradeStrat(stratCandidate.implementation);
 
@@ -292,24 +298,24 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
     }
 
     /*
-    * @dev functions to increase user's cumulative deposits and withdrawals
-    * @param _amount number of LP tokens being deposited/withdrawn
-    */
+     * @dev functions to increase user's cumulative deposits and withdrawals
+     * @param _amount number of LP tokens being deposited/withdrawn
+     */
 
-    function incrementDeposits(uint _amount) internal returns (bool) {
-      uint initial = cumulativeDeposits[tx.origin];
-      uint newTotal = initial + _amount;
-      cumulativeDeposits[tx.origin] = newTotal;
-      emit DepositsIncremented(tx.origin, _amount, newTotal);
-      return true;
+    function incrementDeposits(uint256 _amount) internal returns (bool) {
+        uint256 initial = cumulativeDeposits[tx.origin];
+        uint256 newTotal = initial + _amount;
+        cumulativeDeposits[tx.origin] = newTotal;
+        emit DepositsIncremented(tx.origin, _amount, newTotal);
+        return true;
     }
 
-    function incrementWithdrawals(uint _amount) internal returns (bool) {
-      uint initial = cumulativeWithdrawals[tx.origin];
-      uint newTotal = initial + _amount;
-      cumulativeWithdrawals[tx.origin] = newTotal;
-      emit WithdrawalsIncremented(tx.origin, _amount, newTotal);
-      return true;
+    function incrementWithdrawals(uint256 _amount) internal returns (bool) {
+        uint256 initial = cumulativeWithdrawals[tx.origin];
+        uint256 newTotal = initial + _amount;
+        cumulativeWithdrawals[tx.origin] = newTotal;
+        emit WithdrawalsIncremented(tx.origin, _amount, newTotal);
+        return true;
     }
 
     /**
