@@ -5,11 +5,8 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable {
-    using SafeMath for uint256;
-
     uint256 public constant PERCENT_DIVISOR = 10_000;
     uint256 public constant ONE_YEAR = 365 days;
 
@@ -111,10 +108,8 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable {
 
         if (
             harvestLog.length == 0 ||
-            harvestLog[harvestLog.length - 1].timestamp.add(
-                harvestLogCadence
-            ) <=
-            block.timestamp
+            block.timestamp >=
+            harvestLog[harvestLog.length - 1].timestamp + harvestLogCadence
         ) {
             harvestLog.push(
                 Harvest({
@@ -145,11 +140,7 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable {
         slice = new Harvest[](_n);
         uint256 sliceCounter = 0;
 
-        for (
-            uint256 i = harvestLog.length.sub(_n);
-            i < harvestLog.length;
-            i++
-        ) {
+        for (uint256 i = harvestLog.length - _n; i < harvestLog.length; i++) {
             slice[sliceCounter++] = harvestLog[i];
         }
     }
@@ -175,20 +166,16 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable {
             i > 0 && harvestLog[i].timestamp >= _timestamp;
             i--
         ) {
-            uint256 projectedYearlyProfit = harvestLog[i]
-                .profit
-                .mul(ONE_YEAR)
-                .div(harvestLog[i].timeSinceLastHarvest);
-            runningAPRSum = runningAPRSum.add(
-                projectedYearlyProfit.mul(PERCENT_DIVISOR).div(
-                    harvestLog[i].tvl
-                )
-            );
+            uint256 projectedYearlyProfit = (harvestLog[i].profit * ONE_YEAR) /
+                harvestLog[i].timeSinceLastHarvest;
+            runningAPRSum +=
+                (projectedYearlyProfit * PERCENT_DIVISOR) /
+                harvestLog[i].tvl;
 
             numLogsProcessed++;
         }
 
-        return runningAPRSum.div(numLogsProcessed);
+        return runningAPRSum / numLogsProcessed;
     }
 
     /**
@@ -212,20 +199,16 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable {
             i > 0 && numLogsProcessed < _n;
             i--
         ) {
-            uint256 projectedYearlyProfit = harvestLog[i]
-                .profit
-                .mul(ONE_YEAR)
-                .div(harvestLog[i].timeSinceLastHarvest);
-            runningAPRSum = runningAPRSum.add(
-                projectedYearlyProfit.mul(PERCENT_DIVISOR).div(
-                    harvestLog[i].tvl
-                )
-            );
+            uint256 projectedYearlyProfit = (harvestLog[i].profit * ONE_YEAR) /
+                harvestLog[i].timeSinceLastHarvest;
+            runningAPRSum +=
+                (projectedYearlyProfit * PERCENT_DIVISOR) /
+                harvestLog[i].tvl;
 
             numLogsProcessed++;
         }
 
-        return runningAPRSum.div(numLogsProcessed);
+        return runningAPRSum / numLogsProcessed;
     }
 
     /**
@@ -265,7 +248,7 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable {
         uint256 _strategistFee
     ) external onlyRole(DEFAULT_ADMIN_ROLE) returns (bool) {
         require(
-            _callFee.add(_treasuryFee) == PERCENT_DIVISOR,
+            _callFee + _treasuryFee == PERCENT_DIVISOR,
             "sum != PERCENT_DIVISOR"
         );
         require(
