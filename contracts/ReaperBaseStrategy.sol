@@ -166,12 +166,7 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable {
             i > 0 && harvestLog[i].timestamp >= _timestamp;
             i--
         ) {
-            uint256 projectedYearlyProfit = (harvestLog[i].profit * ONE_YEAR) /
-                harvestLog[i].timeSinceLastHarvest;
-            runningAPRSum +=
-                (projectedYearlyProfit * PERCENT_DIVISOR) /
-                harvestLog[i].tvl;
-
+            runningAPRSum += _getAPRForLog(harvestLog[i]);
             numLogsProcessed++;
         }
 
@@ -199,12 +194,7 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable {
             i > 0 && numLogsProcessed < _n;
             i--
         ) {
-            uint256 projectedYearlyProfit = (harvestLog[i].profit * ONE_YEAR) /
-                harvestLog[i].timeSinceLastHarvest;
-            runningAPRSum +=
-                (projectedYearlyProfit * PERCENT_DIVISOR) /
-                harvestLog[i].tvl;
-
+            runningAPRSum += _getAPRForLog(harvestLog[i]);
             numLogsProcessed++;
         }
 
@@ -302,6 +292,16 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable {
                 hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
             "Not authorized"
         );
+    }
+
+    function _getAPRForLog(Harvest storage log)
+        internal
+        view
+        returns (uint256)
+    {
+        uint256 projectedYearlyProfit = (log.profit * ONE_YEAR) /
+            log.timeSinceLastHarvest;
+        return (projectedYearlyProfit * PERCENT_DIVISOR) / log.tvl;
     }
 
     /**
